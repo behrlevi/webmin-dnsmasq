@@ -335,6 +335,11 @@ our %dnsmconfigvals = (
 #         "6" => {
 #             "cgi_name" => "dhcp_reservations.cgi",
 #         },
+#         "7" => {
+#              "cgi_name" => "dhcp_leases.cgi",
+#              "title" => $dnsmasq::text{"index_dhcp_leases"},
+#              "icon" => "leases.gif",
+#    	},
 #     },
 #     $section[2] => { # tftp
 #         "1" => {
@@ -3533,6 +3538,11 @@ sub init_hashes {
                 "title" => $dnsmasq::text{"index_dhcp_host_reservations"},
                 "icon" => "reservations.gif",
             },
+	    "7" => {
+           	 "cgi_name" => "dhcp_leases.cgi",
+           	 "title" => $dnsmasq::text{"index_dhcp_leases"},
+           	 "icon" => "leases.gif",
+       	   },
         },
         $section[2] => { # tftp
             "1" => {

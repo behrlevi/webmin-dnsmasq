@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-#    DNSMasq Webmin Module - # TODO dhcp_reservations_apply.cgi; update DHCP reservations     
+#    DNSMasq Webmin Module - dhcp_reservations_apply.cgi; update DHCP reservations     
 #    Copyright (C) 2023 by Loren Cress
 #    
 #    This program is free software; you can redistribute it and/or modify
@@ -19,10 +19,14 @@ require "dnsmasq-lib.pl";
 
 ## put in ACL checks here if needed
 
-my $config_filename = $config{config_file};
-my $config_file = &read_file_lines( $config_filename );
+# For debugging
+use Data::Dumper;
+&webmin_debug_log("DHCP Reservations Apply - Input", Dumper(\%in));
 
-&parse_config_file( \%dnsmconfig, \$config_file, $config_filename );
+my $config_filename = $config{config_file};
+my $config_file = &read_file_lines($config_filename);
+
+&parse_config_file(\%dnsmconfig, \$config_file, $config_filename);
 # read posted data
 &ReadParse();
 
@@ -35,63 +39,112 @@ sub eval_input_fields {
     my ($is_new) = @_;
 
     my $par_prefix = ($is_new == 1 ? "new_" : "") . "dhcp_host_";
+
+    # Require at least one identifier
+    return "" if (!$in{$par_prefix . "mac"} && 
+                 !$in{$par_prefix . "clientid"} && 
+                 !$in{$par_prefix . "infiniband"});
+    
     my $val = "";
+
+    # Handle MAC address
     if ($in{$par_prefix . "mac"} ne "") {
-        $val .= ($val ? "," : "") . $in{$par_prefix . "mac"};
+        if ($in{$par_prefix . "mac"} !~ /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/) {
+            &error($dnsmasq::text{'err_macbad'});
+        }
+        $val .= $in{$par_prefix . "mac"};
     }
+
+    # Handle Client ID
     if ($in{$par_prefix . "clientid"} ne "") {
-        $val .= ($val ? "," : "") . $in{$par_prefix . "clientid"};
+        $val .= ($val ? "," : "") . "id:" . $in{$par_prefix . "clientid"};
     }
+    # Handle Infiniband
     elsif ($in{$par_prefix . "infiniband"} ne "") {
         $val .= ($val ? "," : "") . $in{$par_prefix . "infiniband"};
     }
+
+    # Handle Set Tags
     if ($in{$par_prefix . "settag"} ne "") {
         my $settag = "";
-        my $settagin = $in{$par_prefix . "settag"};
-        foreach my $t ( @{ split( ",", $settagin ) } ) {
-            $settag .= ( length( $settag ) ? "," : "" ) . ( $t !~ /^set:/ ) ? "set:" : "" . $t;
+        my @tags = split(/\s*,\s*/, $in{$par_prefix . "settag"});
+        foreach my $t (@tags) {
+            next if !$t;  # Skip empty tags
+            $settag .= ($settag ? "," : "") . 
+                      ($t !~ /^set:/ ? "set:" : "") . 
+                      $t;
         }
-        $val .= ($val ? "," : "") . $settag;
+        $val .= ($val ? "," : "") . $settag if $settag;
     }
+
+    # Handle Tag
     if ($in{$par_prefix . "tag"} ne "") {
         my $tag = $in{$par_prefix . "tag"};
-        $tag = ( $tag !~ /^tag:/ ) ? "tag:" : "" . $tag;
-        $val .= ($val ? "," : "") . $tag;
+        $val .= ($val ? "," : "") . 
+                ($tag !~ /^tag:/ ? "tag:" : "") . 
+                $tag;
     }
+
+    # Handle IP address
     if ($in{$par_prefix . "ip"} ne "") {
+        if (!&check_ipaddress($in{$par_prefix . "ip"})) {
+            &error($dnsmasq::text{'err_ipbad'});
+        }
         $val .= ($val ? "," : "") . $in{$par_prefix . "ip"};
     }
+
+    # Handle Hostname
     if ($in{$par_prefix . "hostname"} ne "") {
+        if ($in{$par_prefix . "hostname"} !~ /^[a-zA-Z0-9][-a-zA-Z0-9]*$/) {
+            &error($dnsmasq::text{'err_hostnamebad'});
+        }
         $val .= ($val ? "," : "") . $in{$par_prefix . "hostname"};
     }
+
+    # Handle Lease Time
     if ($in{$par_prefix . "leasetime"} ne "") {
+        if ($in{$par_prefix . "leasetime"} !~ /^\d+[mhdw]?$|^infinite$/) {
+            &error($dnsmasq::text{'err_leasetimebad'});
+        }
         $val .= ($val ? "," : "") . $in{$par_prefix . "leasetime"};
     }
-    if ($in{$par_prefix . "ignore"} == 1) {
+
+    # Handle Ignore flag
+    if ($in{$par_prefix . "ignore"} eq "1") {
         $val .= ($val ? "," : "") . "ignore";
     }
+
+    &webmin_debug_log("DHCP Reservations Apply - Generated Value", $val);
     return $val;
 }
 
-if ($in{'new_dhcp_host_'} ne "") {
+# Handle new entries
+if ($in{'new_dhcp_host_mac'} ne "" || 
+    $in{'new_dhcp_host_clientid'} ne "" || 
+    $in{'new_dhcp_host_infiniband'} ne "") {
     my $val = &eval_input_fields(1);
-    &add_to_list( "dhcp-host", $val );
+    if ($val) {
+        &webmin_debug_log("DHCP Reservations Apply - Adding new entry", $val);
+        &add_to_list("dhcp-host", $val);
+    }
 }
-elsif ($in{"dhcp_host_idx"} ne "") {
-    my $item = $dnsmconfig{"dhcp-host"}[$in{"dhcp_host_idx"}];
-    my $val = "dhcp-host=" . &eval_input_fields();
-    &save_update($item->{"file"}, $item->{"lineno"}, $val);
+# Handle edited entries
+elsif ($in{"cfg_idx"} ne "") {
+    my $val = &eval_input_fields(0);
+    if ($val) {
+        my $item = $dnsmconfig{"dhcp-host"}[$in{"cfg_idx"}];
+        &webmin_debug_log("DHCP Reservations Apply - Updating entry", "Index: " . $in{"cfg_idx"} . ", Value: " . $val);
+        &save_update($item->{"file"}, $item->{"lineno"}, "dhcp-host=" . $val);
+    }
 }
+# Handle enable/disable/delete actions
 else {
     my @sel = split(/\0/, $in{'sel'});
-    &do_selected_action( [ "dhcp_host" ], \@sel, \%$dnsmconfig );
+    if (@sel) {
+        &webmin_debug_log("DHCP Reservations Apply - Bulk action", "Selection: " . join(",", @sel));
+        &do_selected_action(["dhcp_host"], \@sel, \%dnsmconfig);
+    }
 }
 
-#
-# re-load basic page
-&redirect( $returnto );
-
-# 
-# sub-routines
-#
-### END of dhcp_reservations_apply.cgi ###.
+# Redirect back to the main page
+&redirect($returnto);

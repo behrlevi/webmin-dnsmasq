@@ -1,117 +1,152 @@
 #!/usr/bin/perl
 #
-#    DNSMasq Webmin Module - dhcp_range_apply.cgi; update DHCP address ranges
+#    DNSMasq Webmin Module - dhcp_range_apply.cgi; update DHCP range info     
 #    Copyright (C) 2023 by Loren Cress
 #    
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
 #    the Free Software Foundation; either version 2 of the License, or
 #    (at your option) any later version.
-#
-#    This program is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#    GNU General Public License for more details.
-#
-#    This module based on the DNSMasq Webmin module by Neil Fisher
 
-require "dnsmasq-lib.pl";
+require 'dnsmasq-lib.pl';
 
-## put in ACL checks here if needed
+# For debugging
+use Data::Dumper;
+&webmin_debug_log("DHCP Range Apply - Input", Dumper(\%in));
 
 my $config_filename = $config{config_file};
-my $config_file = &read_file_lines( $config_filename );
+my $config_file = &read_file_lines($config_filename);
 
-&parse_config_file( \%dnsmconfig, \$config_file, $config_filename );
-
-# read posted data
+&parse_config_file(\%dnsmconfig, \$config_file, $config_filename);
 &ReadParse();
 
-my $tab = $in{"tab"} || "basic";
-my $returnto = $in{"returnto"} || "dhcp_range.cgi?tab=$tab";
+my $returnto = $in{"returnto"} || "dhcp_range.cgi";
 my $returnlabel = $in{"returnlabel"} || $dnsmasq::text{"index_dhcp_range"};
 
-my $result = "";
-
-# =[tag:<tag>[,tag:<tag>],][set:<tag>,]<start-addr>[,<end-addr>|<tab>][,<netmask>[,<broadcast>]][,<lease time>] 
-# -OR- 
-# =[tag:<tag>[,tag:<tag>],][set:<tag>,]<start-IPv6addr>[,<end-IPv6addr>|constructor:<interface>][,<tab>][,<prefix-len>][,<lease time>]
 sub eval_input_fields {
+    # =[tag:<tag>[,tag:<tag>],][set:<tag>,]<start-addr>[,<end-addr>|<mode>][,<netmask>[,<broadcast>]][,<lease time>]
     my ($is_new) = @_;
-
-    my $par_prefix = ($is_new == 1) ? "new_" : "";
+    my $par_prefix = ($is_new == 1 ? "new_" : "") . "dhcp_range_";
+    
+    # Check if IPv4 or IPv6
+    my $ipversion = $in{$par_prefix . "ipversion"} || "4";
+    return "" if (!$in{$par_prefix . "start"});
+    
     my $val = "";
-    if ($in{$par_prefix . "dhcp_range_tag"} ne "") {
-        my $tag = "";
-        my $tagin = $in{$par_prefix . "dhcp_range_tag"};
-        foreach my $t ( @{ split( ",", $tagin ) } ) {
-            $tag .= ( length( $tag ) ? "," : "" ) . ( $t !~ /^(tag|set):/ ) ? "tag:" : "" . $t;
+    
+    # Handle tags first
+    if ($in{$par_prefix . "tag"}) {
+        my @tags = split(/\s*,\s*/, $in{$par_prefix . "tag"});
+        foreach my $tag (@tags) {
+            next if !$tag;
+            $val .= ($val ? "," : "") . 
+                   ($tag !~ /^tag:/ ? "tag:" : "") . 
+                   $tag;
         }
-        $val .= $tag;
     }
-    if ($in{$par_prefix . "dhcp_range_settag"} ne "") {
-        my $settag = $in{$par_prefix . "dhcp_range_settag"};
-        if ( $settag !~ /^set:/ ) {
-            $settag = "set:" . $settag;
-        }
-        $val .= "," . $settag;
+    
+    # Handle set tag
+    if ($in{$par_prefix . "settag"}) {
+        $val .= ($val ? "," : "") . 
+               ($in{$par_prefix . "settag"} !~ /^set:/ ? "set:" : "") . 
+               $in{$par_prefix . "settag"};
     }
-    my $val = ($val ? "," : "") . $in{$par_prefix . "dhcp_range_start"};
-    if ($in{$par_prefix . "dhcp_range_ipversion"} == 4) {
-        if ($in{$par_prefix . "dhcp_range_end"} ne "") {
-            $val .= "," . $in{$par_prefix . "dhcp_range_end"};
+    
+    # Start address is required
+    if ($in{$par_prefix . "start"}) {
+        if ($ipversion eq "4" && !&check_ipaddress($in{$par_prefix . "start"})) {
+            &error($dnsmasq::text{'err_ipbad'});
         }
-        elsif ($in{$par_prefix . "dhcp_range_static"} == 1) {
-            $val .= ",static";
+        $val .= ($val ? "," : "") . $in{$par_prefix . "start"};
+    }
+    
+    # End address
+    if ($in{$par_prefix . "end"}) {
+        if ($ipversion eq "4" && !&check_ipaddress($in{$par_prefix . "end"})) {
+            &error($dnsmasq::text{'err_ipbad'});
         }
-        elsif ($in{$par_prefix . "dhcp_range_proxy"} == 1) {
-            $val .= ",proxy";
-        }
-        if ($in{$par_prefix . "dhcp_range_mask"} ne "") {
-            $val .= "," . $in{$par_prefix . "dhcp_range_mask"};
-            if ($in{$par_prefix . "dhcp_range_broadcast"} ne "") {
-                $val .= "," . $in{$par_prefix . "dhcp_range_broadcast"};
+        $val .= ($val ? "," : "") . $in{$par_prefix . "end"};
+    }
+    
+    # IPv4 specific options
+    if ($ipversion eq "4") {
+        # Netmask
+        if ($in{$par_prefix . "mask"}) {
+            if (!&check_ipaddress($in{$par_prefix . "mask"})) {
+                &error($dnsmasq::text{'err_netmaskbad'});
             }
+            $val .= ($val ? "," : "") . $in{$par_prefix . "mask"};
         }
-    }
-    if ($in{$par_prefix . "dhcp_range_ipversion"} == 6) {
-        if ($in{$par_prefix . "dhcp_range_end"} ne "") {
-            $val .= "," . $in{$par_prefix . "dhcp_range_end"};
-        }
-        foreach my $tab ( "static", "ra-only", "ra-names", "ra-stateless", "slaac", "ra-advrouter", "off-link" ) {
-            if ($in{$par_prefix . "dhcp_range_$tab"} == 1) {
-                $val .= ",$tab";
+        
+        # Broadcast
+        if ($in{$par_prefix . "broadcast"}) {
+            if (!&check_ipaddress($in{$par_prefix . "broadcast"})) {
+                &error($dnsmasq::text{'err_broadcastbad'});
             }
-        }
-        if ($in{$par_prefix . "dhcp_range_prefix-length"} ne "") {
-            $val .= "," . $in{$par_prefix . "dhcp_range_prefix-length"};
+            $val .= ($val ? "," : "") . $in{$par_prefix . "broadcast"};
         }
     }
-    if ($in{$par_prefix . "dhcp_range_leasetime"} ne "") {
-        $val .= "," . $in{$par_prefix . "dhcp_range_leasetime"};
+    
+    # IPv6 specific options
+    if ($ipversion eq "6") {
+        # Prefix length
+        if ($in{$par_prefix . "prefix-length"}) {
+            if ($in{$par_prefix . "prefix-length"} !~ /^\d+$/ || 
+                $in{$par_prefix . "prefix-length"} > 128) {
+                &error($dnsmasq::text{'err_prefixbad'});
+            }
+            $val .= ($val ? "," : "") . $in{$par_prefix . "prefix-length"};
+        }
     }
+    
+    # Boolean options
+    my @bool_options = ("static", "ra-only", "ra-names", "ra-stateless", 
+                       "slaac", "ra-advrouter", "off-link");
+    foreach my $opt (@bool_options) {
+        if ($in{$par_prefix . $opt} eq "1") {
+            $val .= ($val ? "," : "") . $opt;
+        }
+    }
+    
+    # Lease time
+    if ($in{$par_prefix . "leasetime"}) {
+        if ($in{$par_prefix . "leasetime"} !~ /^\d+[mhdw]?$|^infinite$/) {
+            &error($dnsmasq::text{'err_leasetimebad'});
+        }
+        $val .= ($val ? "," : "") . $in{$par_prefix . "leasetime"};
+    }
+    
+    &webmin_debug_log("DHCP Range Apply - Generated Value", $val);
     return $val;
 }
 
-if ($in{'new_dhcp_range_start'} ne "") {
+# Handle new entries
+if ($in{'new_dhcp_range_start'}) {
     my $val = &eval_input_fields(1);
-    &add_to_list( "dhcp-range", $val );
+    if ($val) {
+        &webmin_debug_log("DHCP Range Apply - Adding new entry", $val);
+        &add_to_list("dhcp-range", $val);
+    }
 }
-elsif ($in{"dhcp_range_idx"} ne "" && $in{"dhcp_range_start"} ne "") {
-    my $item = $dnsmconfig{"dhcp-range"}[$in{"dhcp_range_idx"}];
-    my $val = "dhcp-range=" . &eval_input_fields();
-    &save_update($item->{"file"}, $item->{"lineno"}, $val);
+# Handle edited entries
+elsif ($in{"cfg_idx"} ne "") {
+    my $val = &eval_input_fields(0);
+    if ($val) {
+        my $item = $dnsmconfig{"dhcp-range"}[$in{"cfg_idx"}];
+        &webmin_debug_log("DHCP Range Apply - Updating entry", 
+                         "Index: " . $in{"cfg_idx"} . ", Value: " . $val);
+        &save_update($item->{"file"}, $item->{"lineno"}, "dhcp-range=" . $val);
+    }
 }
+# Handle enable/disable/delete actions
 else {
     my @sel = split(/\0/, $in{'sel'});
-    &do_selected_action( [ "dhcp_range" ], \@sel, \%$dnsmconfig );
+    if (@sel) {
+        &webmin_debug_log("DHCP Range Apply - Bulk action", 
+                         "Selection: " . join(",", @sel));
+        &do_selected_action(["dhcp_range"], \@sel, \%dnsmconfig);
+    }
 }
 
-#
-# re-load basic page
-&redirect( $returnto );
-
-# 
-# sub-routines
-#
-### END of dhcp_range_apply.cgi ###.
+# Redirect back to the main page with the correct tab
+&redirect($returnto . "?ipversion=" . ($in{"ipversion"} || "ip4"));
