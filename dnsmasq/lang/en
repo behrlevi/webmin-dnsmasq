@@ -750,6 +750,15 @@ err_hostnamebad=Invalid hostname format
 err_leasetimebad=Invalid lease time format - must be a number followed by m, h, d, w or 'infinite'
 err_ipbad=Invalid IP address format
 
+#DHCP Pools
+dhcp_pools_title=Active DHCP Pools
+index_pools=Pools
+title=Pools
+add_range=Manually add a new range
+value_label=Enter value
+save=Save
+error_invalid=Invalid value entered
+
 #Additional error handling for DHCP subnets module
 err_netmaskbad=Invalid netmask format
 err_broadcastbad=Invalid broadcast address format

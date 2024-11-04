@@ -1,31 +1,13 @@
 #!/usr/bin/perl
-#
-#    DNSMasq Webmin Module - dhcp_range.cgi; DHCP address ranges
-#    Copyright (C) 2023 by Loren Cress
-#
-#    This program is free software; you can redistribute it and/or modify
-#    it under the terms of the GNU General Public License as published by
-#    the Free Software Foundation; either version 2 of the License, or
-#    (at your option) any later version.
-#
-#    This program is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#    GNU General Public License for more details.
-#
-#    This module based on the DNSMasq Webmin module by Neil Fisher
-
+use WebminCore;
 require 'dnsmasq-lib.pl';
 
-## put in ACL checks here if needed
-
+init_config();
 my $config_filename = $config{config_file};
 my $config_file = &read_file_lines( $config_filename );
-
 &parse_config_file( \%dnsmconfig, \$config_file, $config_filename );
-# read posted data
-&ReadParse();
 
+&ReadParse();
 my ($error_check_action, $error_check_result) = &check_for_file_errors( $0, $dnsmasq::text{"index_dhcp_range"}, \%dnsmconfig );
 if ($error_check_action eq "redirect") {
     &redirect ( $error_check_result );
@@ -33,13 +15,7 @@ if ($error_check_action eq "redirect") {
 
 my ($section, $page) = &get_context($0);
 
-&ui_print_header($dnsmasq::text{"index_dhcp_range"} . &icon_if_disabled($section), $dnsmasq::text{"index_title"}, "", "intro", 1, 0, 0, &restart_button());
-print &header_js(\%dnsmconfig);
 print $error_check_result;
-
-my $returnto = $in{"returnto"} || "dhcp_range.cgi";
-my $returnlabel = $in{"returnlabel"} || $dnsmasq::text{"index_dhcp_range"};
-my $apply_cgi = "dhcp_range_apply.cgi";
 
 our $internalfield = "dhcp_range";
 my $configfield = &internal_to_config($internalfield);
@@ -74,8 +50,7 @@ sub show_ip_range_list {
     push(@list_link_buttons, $add_button);
 
     my $count = -1;
-    print &ui_form_start( $apply_cgi . "?ipversion=ip" . $ipver, "post", undef, "id='$formid'" );
-    print &ui_links_row(\@list_link_buttons);
+    print &ui_form_start("save.cgi", "post");
     print &ui_columns_start( \@column_headers, 100, undef, undef, &ui_columns_header( [ &show_title_with_help($internalfield, $configfield) ], [ 'class="table-title" colspan=' . @column_headers ] ), 1 );
     foreach my $item ( @{$dnsmconfig{$configfield}} ) {
         $count++;
@@ -108,33 +83,38 @@ sub show_ip_range_list {
         print &ui_clickable_checked_columns_row( \@cols, \@tds, "sel", $count );
     }
     print &ui_columns_end();
-    print &ui_links_row(\@list_link_buttons);
-    print "<p>" . $dnsmasq::text{"with_selected"} . "</p>";
-    print &ui_submit($dnsmasq::text{"button_enable_sel"}, "enable_sel_$internalfield");
-    print &ui_submit($dnsmasq::text{"button_disable_sel"}, "disable_sel_$internalfield");
-    print &ui_submit($dnsmasq::text{"button_delete_sel"}, "delete_sel_$internalfield");
+    print &ui_submit($dnsmasq::text{"button_delete_sel"}, "delete_sel_dhcp_range");
     print $hidden_add_input_fields;
     print $hidden_edit_input_fields;
     print &ui_form_end();
 }
 
-my @tabs = (   [ 'ip4', $dnsmasq::text{"dhcp_ipversion4"} ],
-            [ 'ip6', $dnsmasq::text{"dhcp_ipversion6"} ] );
-my $ipversion = $in{"ipversion"} || "ip4";
-print &ui_tabs_start(\@tabs, "ipversion", $ipversion);
+# Display header
+&ui_print_header(undef, $dnsmasq::text{'dhcp_pools_title'}, "");
 
-print &ui_tabs_start_tab("ipversion", 'ip4');
+# Create simple form
+print &ui_form_start("save.cgi", "post");
+print &ui_table_start($text{'add_range'}, undef, 2);
+
+# Add manual entry fields
+print &ui_table_row(
+    "<table border='0' cellspacing='0' cellpadding='0'><tr>" .
+    "<td>Start IP: " . &ui_textbox("start_ip", $config{'start_ip'}, 20) . "</td>" .
+    "<td>&nbsp;&nbsp;</td>" .
+    "<td>End IP: " . &ui_textbox("end_ip", $config{'end_ip'}, 20) . "</td>" .
+    "<td>&nbsp;&nbsp;</td>" .
+    "<td>Lease Time: " . &ui_textbox("lease_time", $config{'lease_time'}, 20) . "</td>" .
+    "</tr></table>",
+    undef,  # No header
+    1       # Span all columns
+);
+
+print &ui_table_end();
+print &ui_form_end([ [ "save", $text{'save'} ] ]);
+
 &show_ip_range_list(4, $formidx++);
-print &ui_tabs_end_tab("ipversion", 'ip4');
 
-print &ui_tabs_start_tab("ipversion", 'ip6');
-&show_ip_range_list(6, $formidx++);
-print &ui_tabs_end_tab("ipversion", 'ip6');
+# Display footer
+&ui_print_footer("/", $text{'index'});
 
-print &ui_tabs_end();
 
-print &add_js();
-
-&ui_print_footer("index.cgi?tab=dhcp", $dnsmasq::text{"index_dhcp_settings"}, "index.cgi?tab=dns", $dnsmasq::text{"index_dns_settings"});
-
-### END of dhcp_range.cgi ###.
