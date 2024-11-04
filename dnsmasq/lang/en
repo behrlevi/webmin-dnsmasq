@@ -744,6 +744,7 @@ dhcp_leases_host=Hostname
 dhcp_leases_ip=IP Address
 dhcp_leases_mac=MAC Address
 dhcp_leases_expires=Expires
+dhcp_leases_hostname=Hostname
 dhcp_leases_clientid=Client ID
 err_macbad=Invalid MAC address format
 err_hostnamebad=Invalid hostname format
