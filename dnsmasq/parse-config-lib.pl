@@ -3544,7 +3544,7 @@ sub init_hashes {
            	 "icon" => "leases.gif"
         },
         "8" => {
-           	 "cgi_name" => "test.cgi",
+           	 "cgi_name" => "dhcp_pools.cgi",
            	 "title" => $dnsmasq::text{"index_pools"},
            	 "icon" => "leases.gif",
        	   },
