@@ -752,7 +752,7 @@ err_ipbad=Invalid IP address format
 
 #DHCP Pools
 dhcp_pools_title=Active DHCP Pools
-index_pools=Pools
+index_pools=DHCP IP Pools (simple)
 title=Pools
 add_range=Manually add a new range
 value_label=Enter value

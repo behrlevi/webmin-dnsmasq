@@ -3538,17 +3538,17 @@ sub init_hashes {
                 "title" => $dnsmasq::text{"index_dhcp_host_reservations"},
                 "icon" => "reservations.gif",
             },
-	    "7" => {
-           	 "cgi_name" => "dhcp_leases.cgi",
-           	 "title" => $dnsmasq::text{"index_dhcp_leases"},
-           	 "icon" => "leases.gif"
-        },
-        "8" => {
-           	 "cgi_name" => "dhcp_pools.cgi",
-           	 "title" => $dnsmasq::text{"index_pools"},
-           	 "icon" => "leases.gif",
-       	   },
-        },
+            "7" => {
+                 "cgi_name" => "dhcp_leases.cgi",
+                 "title" => $dnsmasq::text{"index_dhcp_leases"},
+                 "icon" => "leases.gif"
+            },
+            "8" => {
+                 "cgi_name" => "dhcp_pools.cgi",
+                 "title" => $dnsmasq::text{"index_pools"},
+                 "icon" => "pools.gif",
+               },
+            },
         $section[2] => { # tftp
             "1" => {
                 "cgi_name" => "tftp_basic.cgi",

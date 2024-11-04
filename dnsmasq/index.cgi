@@ -43,7 +43,7 @@ foreach my $c ( @section ) {
     push(@tabs, [$c, $dnsmasq::text{"index_" . $c . "_settings"} . &icon_if_disabled($c)]);
 }
 
-my $tab = @section[0];
+my $tab = @section[1];
 if ( defined ($in{"tab"}) ) {
     $tab = $in{"tab"};
 }
