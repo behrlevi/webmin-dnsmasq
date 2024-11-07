@@ -13,6 +13,8 @@ if (-r $leases_file) {
         while (<LEASES>) {
             chomp;
             my ($expires, $mac, $ip, $hostname, $clientid) = split(/\s+/);
+            # Strip everything after first colon in clientid
+            $clientid =~ s/:.*$//g if $clientid;
             push(@leases, {
                 'expires' => $expires ? scalar(localtime($expires)) : $dnsmasq::text{'never'},
                 'mac' => $mac || "-",
@@ -46,7 +48,7 @@ if (@leases) {
             $lease->{'expires'},
             "<tt>$lease->{'mac'}</tt>",
             "<tt>$lease->{'ip'}</tt>",
-            $lease->{'hostname'},
+            "<tt>$lease->{'hostname'}</tt>",
             "<tt>$lease->{'clientid'}</tt>"
         ]);
     }

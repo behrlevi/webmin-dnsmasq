@@ -3548,7 +3548,13 @@ sub init_hashes {
                  "title" => $dnsmasq::text{"index_pools"},
                  "icon" => "pools.gif",
                },
+            "9" => {
+                "cgi_name" => "manual_edit.cgi",
+                "cgi_params" => "type=config",
+                "title" => $dnsmasq::text{"index_dns_config_edit"},
+                "icon" => "manual.gif",
             },
+        },
         $section[2] => { # tftp
             "1" => {
                 "cgi_name" => "tftp_basic.cgi",
